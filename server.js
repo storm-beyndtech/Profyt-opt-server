@@ -11,6 +11,7 @@ import withdrawalsRoutes from "./routes/withdrawals.js";
 import utilsRoutes from "./routes/utils.js";
 import kycsRoutes from "./routes/kycs.js";
 import planRoutes from "./routes/plans.js";
+import seedUtil from "./utils/seedUtil.js";
 
 dotenv.config();
 
@@ -35,6 +36,10 @@ mongoose
 	.then(() => console.log("Connected to MongoDB..."))
 	.catch((e) => console.error("Error connecting to MongoDB:", e));
 
+(async function () {
+	await seedUtil();
+})();
+
 // CORS middleware
 app.use((req, res, next) => {
 	res.header("Access-Control-Allow-Origin", "*");
@@ -50,7 +55,7 @@ app.use("/api/deposits", depositsRoutes);
 app.use("/api/withdrawals", withdrawalsRoutes);
 app.use("/api/utils", utilsRoutes);
 app.use("/api/kycs", kycsRoutes);
-app.use('/api/plans', planRoutes);
+app.use("/api/plans", planRoutes);
 
 // Listening to port
 const PORT = process.env.PORT || 5000;
