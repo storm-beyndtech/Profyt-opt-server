@@ -5,8 +5,8 @@ export function emailTemplate(bodyContent) {
         <td align="center">
           <table role="presentation" width="100%" max-width="600px" bgcolor="#ffffff" style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
             <tr>
-              <td align="center" style="padding: 20px; background: #13160F;">
-                <img src="https://res.cloudinary.com/ddb1vjioq/image/upload/v1753783636/email-logo_uucns8.png" width="120" alt="Company Logo" style="display: block;">
+              <td align="center" style="padding: 20px; background: #040611;">
+                <img src="https://res.cloudinary.com/ddb1vjioq/image/upload/v1756730648/email-logo_uue8aj.png" width="120" alt="Company Logo" style="display: block;">
               </td>
             </tr>
 
