@@ -406,11 +406,22 @@ router.get("/:id/active-investment-interest", async (req, res) => {
 			totalActiveInterest += currentInterest;
 		});
 
+		// Prepare investment details for client-side calculation
+		const investmentDetails = activeInvestments.map(investment => ({
+			_id: investment._id.toString(),
+			amount: investment.amount,
+			startDate: investment.planData.startDate.toISOString(),
+			endDate: investment.planData.endDate.toISOString(),
+			totalInterest: investment.planData.interest,
+			isCompleted: false // They're all active
+		}));
+
 		res.json({
 			userId: id,
 			totalActiveInterest: Math.round(totalActiveInterest * 100) / 100, // Round to 2 decimal places
 			activeInvestmentCount: activeInvestments.length,
-			timestamp: currentDate.toISOString()
+			timestamp: currentDate.toISOString(),
+			investments: investmentDetails // Include investment details for client-side calculation
 		});
 	} catch (error) {
 		console.error("Error fetching active investment interest:", error);

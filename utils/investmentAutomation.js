@@ -16,12 +16,19 @@ async function processCompletedInvestments() {
 	console.log("🔄 Starting automated investment completion check...");
 
 	try {
-		// Find all active investments
+		// Find only investments that might be due (optimization for MongoDB)
+		const now = new Date();
+		const bufferTime = new Date(now.getTime() + (10 * 60 * 1000)); // 10 minutes buffer
+		
 		const activeInvestments = await Transaction.find({
 			type: "investment",
 			status: "active",
-			"planData.endDate": { $exists: true, $ne: null }
-		});
+			"planData.endDate": { 
+				$exists: true, 
+				$ne: null,
+				$lte: bufferTime // Only check investments ending soon
+			}
+		}).limit(50); // Limit to prevent excessive processing
 
 		console.log(`📊 Found ${activeInvestments.length} active investments to check`);
 
@@ -86,8 +93,8 @@ async function processCompletedInvestments() {
 const startInvestmentAutomation = () => {
 	console.log("🚀 Starting investment automation system...");
 	
-	// Schedule to run every 1 minute for testing (change to */15 for production)
-	cron.schedule("*/1 * * * *", async () => {
+	// Schedule to run every 5 minutes to be gentle on free MongoDB
+	cron.schedule("*/5 * * * *", async () => {
 		await processCompletedInvestments();
 	}, {
 		scheduled: true,
@@ -100,7 +107,7 @@ const startInvestmentAutomation = () => {
 		await processCompletedInvestments();
 	}, 5000); // Wait 5 seconds after server start
 
-	console.log("⏰ Investment automation scheduled: Every 1 minute (for testing)");
+	console.log("⏰ Investment automation scheduled: Every 5 minutes (MongoDB-friendly)");
 };
 
 // Manual trigger function for testing/admin use
