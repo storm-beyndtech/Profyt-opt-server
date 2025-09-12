@@ -9,6 +9,8 @@ import {
 	investmentRejected,
 	investmentRequested,
 } from "../utils/mailer.js";
+import { calculateEndDate, calculateProgressiveInterest, isInvestmentDue, formatTimeRemaining } from "../utils/dateUtils.js";
+import { manualInvestmentCheck } from "../utils/investmentAutomation.js";
 
 const router = express.Router();
 
@@ -148,7 +150,7 @@ router.delete("/:id", async (req, res) => {
 	}
 });
 
-// POST /api/plans/invest - Create investment (User)
+// POST /api/plans/invest - Create investment (User) - Now with automatic approval
 router.post("/invest", async (req, res) => {
 	try {
 		const { planId, amount, userId, interest } = req.body;
@@ -181,7 +183,12 @@ router.post("/invest", async (req, res) => {
 		user.deposit -= amount;
 		await user.save();
 
-		// Create investment transaction
+		// Calculate investment dates
+		const startDate = new Date();
+		const endDate = calculateEndDate(startDate, plan.duration);
+		const totalInterest = interest || (amount * plan.roi) / 100;
+
+		// Create investment transaction with automatic approval
 		const transaction = new Transaction({
 			type: "investment",
 			user: {
@@ -189,21 +196,34 @@ router.post("/invest", async (req, res) => {
 				email: user.email,
 				name: user.username,
 			},
-			status: "pending",
+			status: "active", // Automatically set to active instead of pending
 			amount: amount,
 			planData: {
 				plan: plan.name,
 				duration: plan.duration,
-				interest: interest || (amount * plan.roi) / 100,
+				interest: totalInterest,
+				startDate: startDate,
+				endDate: endDate,
+				currentInterest: 0, // Progressive interest starts at 0
 			},
 		});
 
 		await transaction.save();
-		await investmentRequested(user.email, user.fullName, amount, transaction.date, plan.name);
+		
+		// Send approval notification instead of request
+		await investmentApproved(user.email, user.fullName, amount, transaction.date, plan.name);
 		await alertAdmin(user.email, amount, transaction.date, "investment");
+		
 		res.status(201).json({
-			message: "Investment created successfully",
+			message: "Investment activated successfully",
 			remainingBalance: user.deposit,
+			investment: {
+				id: transaction._id,
+				status: "active",
+				startDate: startDate,
+				endDate: endDate,
+				timeRemaining: endDate.getTime() - startDate.getTime(),
+			},
 		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
@@ -276,6 +296,89 @@ router.put("/investment/:id", async (req, res) => {
 			message: `Investment ${status} successfully`,
 			transaction: transaction,
 		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+});
+
+// GET /api/plans/investment/:id/progress - Get current investment progress
+router.get("/investment/:id/progress", async (req, res) => {
+	try {
+		const { id } = req.params;
+		
+		const transaction = await Transaction.findById(id);
+		if (!transaction || transaction.type !== "investment") {
+			return res.status(404).json({ message: "Investment not found" });
+		}
+
+		const currentDate = new Date();
+		const startDate = transaction.planData.startDate;
+		const endDate = transaction.planData.endDate;
+		const totalInterest = transaction.planData.interest;
+
+		// Calculate current progressive interest
+		const currentInterest = calculateProgressiveInterest(totalInterest, startDate, endDate, currentDate);
+		const timeRemaining = formatTimeRemaining(endDate, currentDate);
+		const isCompleted = isInvestmentDue(endDate, currentDate);
+
+		res.json({
+			investmentId: id,
+			status: isCompleted ? "ready_to_complete" : transaction.status,
+			totalAmount: transaction.amount,
+			totalInterest: totalInterest,
+			currentInterest: currentInterest,
+			progress: Math.min((currentInterest / totalInterest) * 100, 100),
+			timeRemaining: timeRemaining,
+			startDate: startDate,
+			endDate: endDate,
+			isCompleted: isCompleted,
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+});
+
+// GET /api/plans/investments/active - Get all active investments for automation
+router.get("/investments/active", async (req, res) => {
+	try {
+		const activeInvestments = await Transaction.find({
+			type: "investment",
+			status: "active"
+		});
+
+		const currentDate = new Date();
+		const investmentsWithProgress = activeInvestments.map(investment => {
+			const startDate = investment.planData.startDate;
+			const endDate = investment.planData.endDate;
+			const totalInterest = investment.planData.interest;
+			const currentInterest = calculateProgressiveInterest(totalInterest, startDate, endDate, currentDate);
+			const isDue = isInvestmentDue(endDate, currentDate);
+
+			return {
+				...investment.toObject(),
+				currentInterest,
+				isDue,
+				progress: Math.min((currentInterest / totalInterest) * 100, 100),
+			};
+		});
+
+		res.json({
+			investments: investmentsWithProgress,
+			summary: {
+				total: activeInvestments.length,
+				readyToComplete: investmentsWithProgress.filter(inv => inv.isDue).length,
+			}
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+});
+
+// POST /api/plans/investments/complete-automation - Manual trigger for investment completion (Admin)
+router.post("/investments/complete-automation", async (req, res) => {
+	try {
+		await manualInvestmentCheck();
+		res.json({ message: "Investment completion check triggered successfully" });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

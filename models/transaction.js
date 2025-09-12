@@ -66,6 +66,18 @@ const transactionSchema = new mongoose.Schema({
       type: Number,
       default: 0,
     },
+    startDate: {
+      type: Date,
+      default: null,
+    },
+    endDate: {
+      type: Date,
+      default: null,
+    },
+    currentInterest: {
+      type: Number,
+      default: 0,
+    },
   }
 });
 

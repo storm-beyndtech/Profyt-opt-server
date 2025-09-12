@@ -9,6 +9,8 @@ import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import { Otp } from "../models/otp.js";
+import { Transaction } from "../models/transaction.js";
+import { calculateProgressiveInterest } from "../utils/dateUtils.js";
 
 // Configure Cloudinary
 cloudinary.config({
@@ -373,6 +375,46 @@ router.post("/verifyToken", async (req, res) => {
 		}
 	} catch (error) {
 		return res.status(500).send({ message: "Something Went Wrong..." });
+	}
+});
+
+// GET /api/users/:id/active-investment-interest - Get user's current active investment interest
+router.get("/:id/active-investment-interest", async (req, res) => {
+	try {
+		const { id } = req.params;
+		
+		// Find all active investments for the user
+		const activeInvestments = await Transaction.find({
+			type: "investment",
+			status: "active",
+			"user.id": id,
+			"planData.startDate": { $exists: true, $ne: null },
+			"planData.endDate": { $exists: true, $ne: null }
+		});
+
+		let totalActiveInterest = 0;
+		const currentDate = new Date();
+
+		// Calculate progressive interest for each active investment
+		activeInvestments.forEach(investment => {
+			const startDate = investment.planData.startDate;
+			const endDate = investment.planData.endDate;
+			const totalInterest = investment.planData.interest;
+
+			// Calculate current progressive interest
+			const currentInterest = calculateProgressiveInterest(totalInterest, startDate, endDate, currentDate);
+			totalActiveInterest += currentInterest;
+		});
+
+		res.json({
+			userId: id,
+			totalActiveInterest: Math.round(totalActiveInterest * 100) / 100, // Round to 2 decimal places
+			activeInvestmentCount: activeInvestments.length,
+			timestamp: currentDate.toISOString()
+		});
+	} catch (error) {
+		console.error("Error fetching active investment interest:", error);
+		res.status(500).json({ message: error.message });
 	}
 });
 

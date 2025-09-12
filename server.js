@@ -12,6 +12,7 @@ import utilsRoutes from "./routes/utils.js";
 import kycsRoutes from "./routes/kycs.js";
 import planRoutes from "./routes/plans.js";
 import seedUtil from "./utils/seedUtil.js";
+import { startInvestmentAutomation } from "./utils/investmentAutomation.js";
 
 dotenv.config();
 
@@ -39,6 +40,9 @@ mongoose
 (async function () {
 	await seedUtil();
 })();
+
+// Start investment automation system
+startInvestmentAutomation();
 
 // CORS middleware
 app.use((req, res, next) => {
